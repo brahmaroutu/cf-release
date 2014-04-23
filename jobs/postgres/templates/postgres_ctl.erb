@@ -7,6 +7,9 @@ JOB_DIR=/var/vcap/jobs/postgres
 STORE_DIR=/var/vcap/store
 DATA_DIR=$STORE_DIR/postgres
 
+PACKAGE_DIR_OLD=/var/vcap/packages/postgres/postgres.old
+DATA_DIR_OLD=$STORE_DIR/postgres.old
+
 RUN_DIR=/var/vcap/sys/run/postgres
 LOG_DIR=/var/vcap/sys/log/postgres
 
@@ -17,6 +20,8 @@ PIDFILE=$RUN_DIR/postgres.pid
 HOST='0.0.0.0'
 PORT="<%= db.port %>"
 LD_LIBRARY_PATH=$PACKAGE_DIR/lib:$LD_LIBRARY_PATH
+
+NEED_MIGRATION=0
 
 source /var/vcap/packages/common/utils.sh
 
@@ -51,12 +56,33 @@ case "$1" in
       chown vcap:vcap $LOG_DIR
     fi
 
+    if [ -f $LOG_DIR/version.txt ]; then
+      OLD_VERSION=`cat $LOG_DIR/version.txt`
+    else 
+      OLD_VERSION=0
+    fi
+    
+    NEW_VERSION=`$PACKAGE_DIR/bin/postgres -V| awk '{print $3}'`
+    echo "$OLD_VERSION vs $NEW_VERSION"
+    
+    if [ $NEW_VERSION == $OLD_VERSION ]; then
+      echo "versions match"
+    else
+      echo "need migration"
+      NEED_MIGRATION=1
+    fi
+    
+    if [ $NEED_MIGRATION -eq 1 ]; then
+      echo "moving $DATA_DIR $DATA_DIR_OLD"
+      mv $DATA_DIR $DATA_DIR_OLD
+    fi
+
     if [ ! -d $DATA_DIR -o ! -f $DATA_DIR/postgresql.conf ]; then
       mkdir -p $DATA_DIR
       chown vcap:vcap $DATA_DIR
 
       # initdb creates data directories
-      su - vcap -c "$PACKAGE_DIR/bin/initdb -E utf8 --locale en_US.UTF-8 -D $DATA_DIR"
+      su - vcap -c "$PACKAGE_DIR/bin/initdb -E 'UTF-8' --lc-collate='en_US.UTF-8' --lc-ctype=locale='en_US.UTF-8' -D $DATA_DIR"
 
       mkdir -p $DATA_DIR/pg_log
       chown vcap:vcap $DATA_DIR/pg_log
@@ -64,6 +90,15 @@ case "$1" in
 
     cp $JOB_DIR/config/{postgresql,pg_hba}.conf $DATA_DIR
     chown vcap:vcap $DATA_DIR/{postgresql,pg_hba}.conf
+
+    if [ $NEED_MIGRATION -eq 1 ]; then
+      echo "Migrating PostgreSQL"
+      su - vcap -c "$PACKAGE_DIR/bin/pg_upgrade \
+        --old-datadir $DATA_DIR_OLD \
+        --new-datadir $DATA_DIR \
+        --old-bindir $PACKAGE_DIR_OLD/bin \
+        --new-bindir $PACKAGE_DIR/bin"
+    fi
 
     echo "Starting PostgreSQL: "
     su - vcap -c "$PACKAGE_DIR/bin/pg_ctl -o \"-h $HOST -p $PORT\" \
@@ -88,6 +123,9 @@ case "$1" in
                                 WITH LOGIN PASSWORD '<%= role.password %>'"
     <% end %>
 
+    echo "Creating version file..."
+    echo `$PACKAGE_DIR/bin/postgres -V| awk '{print $3}'` > $LOG_DIR/version.txt 
+    
     echo "Creating databases..."
     <% db.databases.each do |database| %>
       echo "Trying to create database <%= database.name %>..."
@@ -100,7 +138,7 @@ case "$1" in
         set +e
         $PACKAGE_DIR/bin/psql -U vcap -p $PORT \
                               -d "<%= database.name %>" \
-                              -f $PACKAGE_DIR/share/postgresql/contrib/citext.sql
+                              -c "create extension citext WITH schema public"
         set -e
       <% end %>
 

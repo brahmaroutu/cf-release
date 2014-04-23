@@ -1,12 +1,14 @@
 set -e -x
-
+   
 if [[ `uname -a` =~ "x86_64" ]] ; then
-  archive="postgres-9.0.3-1.amd64.tar.gz"
+  old_archive="postgres-9.0.3-1.amd64.tar.gz"
   echo "Using 64-bit version"
 else
-  archive="postgres-9.0.3-1.i386.tar.gz"
+  old_archive="postgres-9.0.3-1.i386.tar.gz"
   echo "Using 32-bit version"
 fi
+
+archive="postgresql-9.3.4.tar.gz"
 
 if [[ -f postgres/$archive ]] ; then
   echo "Archive found"
@@ -16,4 +18,40 @@ else
 fi
 
 echo "Extracting archive..."
-tar xzf postgres/$archive -C ${BOSH_INSTALL_TARGET}
+tar xzf postgres/postgresql-9.3.4.tar.gz
+
+cd postgresql-9.3.4
+
+
+if [[ `uname -a` =~ "x86_64" ]] ; then
+  ./configure --prefix=${BOSH_INSTALL_TARGET}
+else
+  CFLAGS=-m32 LDFLAGS=-m32 CXXFLAGS=-m32 ./configure --prefix=${BOSH_INSTALL_TARGET}
+fi
+
+pushd src/bin/pg_config
+make
+make install
+popd
+
+cp -LR src/include ${BOSH_INSTALL_TARGET}
+pushd src/interfaces/libpq
+make
+make install
+popd
+
+pushd src
+make
+make install
+popd
+
+pushd contrib
+make
+make install
+popd
+
+cd ..
+
+echo "Extracting old archives..."
+mkdir ${BOSH_INSTALL_TARGET}/postgres.old
+tar xzf postgres/$old_archive -C ${BOSH_INSTALL_TARGET}/postgres.old
