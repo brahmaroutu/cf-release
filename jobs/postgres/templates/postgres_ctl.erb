@@ -58,20 +58,18 @@ case "$1" in
 
     if [ -f $LOG_DIR/version.txt ]; then
       OLD_VERSION=`cat $LOG_DIR/version.txt`
-    else 
+    else
       OLD_VERSION=0
     fi
-    
+
     NEW_VERSION=`$PACKAGE_DIR/bin/postgres -V| awk '{print $3}'`
     echo "$OLD_VERSION vs $NEW_VERSION"
-    
-    if [ $NEW_VERSION == $OLD_VERSION ]; then
-      echo "versions match"
-    else
+
+    if [ $NEW_VERSION != $OLD_VERSION  -a  -d $DATA_DIR  ]; then
       echo "need migration"
       NEED_MIGRATION=1
     fi
-    
+
     if [ $NEED_MIGRATION -eq 1 ]; then
       echo "moving $DATA_DIR $DATA_DIR_OLD"
       mv $DATA_DIR $DATA_DIR_OLD
@@ -82,7 +80,7 @@ case "$1" in
       chown vcap:vcap $DATA_DIR
 
       # initdb creates data directories
-      su - vcap -c "$PACKAGE_DIR/bin/initdb -E 'UTF-8' --lc-collate='en_US.UTF-8' --lc-ctype=locale='en_US.UTF-8' -D $DATA_DIR"
+      su - vcap -c "$PACKAGE_DIR/bin/initdb -E utf8 --locale en_US.UTF-8 -D $DATA_DIR"
 
       mkdir -p $DATA_DIR/pg_log
       chown vcap:vcap $DATA_DIR/pg_log
@@ -124,8 +122,8 @@ case "$1" in
     <% end %>
 
     echo "Creating version file..."
-    echo `$PACKAGE_DIR/bin/postgres -V| awk '{print $3}'` > $LOG_DIR/version.txt 
-    
+    echo `$PACKAGE_DIR/bin/postgres -V| awk '{print $3}'` > $LOG_DIR/version.txt
+
     echo "Creating databases..."
     <% db.databases.each do |database| %>
       echo "Trying to create database <%= database.name %>..."
@@ -150,6 +148,41 @@ case "$1" in
         <% end %>
       <% end %>
     <% end %>
+
+    if [ $OLD_VERSION = "9.0.3" -o $OLD_VERSION = "0" ]; then
+      <% db.databases.each do |database| %>
+        $PACKAGE_DIR/bin/psql -U vcap -p $PORT \
+                              -d "<%= database.name %>" \
+                              -c "UPDATE pg_catalog.pg_index SET indcollation = (CASE indcollation
+                                           WHEN '0'::oidvector then '100'::oidvector
+                                           WHEN '0 0'::oidvector then '100 0'::oidvector
+                                           END)
+                                    WHERE indclass[0] IN (
+                                      WITH RECURSIVE typeoids(typoid) AS
+                                        ( SELECT 'citext'::pg_catalog.regtype UNION
+                                          SELECT oid FROM pg_catalog.pg_type, typeoids
+                                            WHERE typelem = typoid OR typbasetype = typoid )
+                                        SELECT oid FROM pg_catalog.pg_opclass, typeoids
+                                          WHERE opcintype = typeoids.typoid
+								  );"
+
+        $PACKAGE_DIR/bin/psql -U vcap -p $PORT \
+                              -d "<%= database.name %>" \
+                              -c "UPDATE pg_catalog.pg_index SET indcollation = (CASE indcollation
+                                           WHEN '0 0'::oidvector then '0 100'::oidvector
+                                           WHEN '100 0'::oidvector then '100 100'::oidvector
+                                           WHEN '0 0 0'::oidvector then '100 100 0'::oidvector
+                                           END)
+                                    WHERE indclass[1] IN (
+                                      WITH RECURSIVE typeoids(typoid) AS
+                                        ( SELECT 'citext'::pg_catalog.regtype UNION
+                                          SELECT oid FROM pg_catalog.pg_type, typeoids
+                                            WHERE typelem = typoid OR typbasetype = typoid )
+                                        SELECT oid FROM pg_catalog.pg_opclass, typeoids
+                                          WHERE opcintype = typeoids.typoid
+                                  );"
+      <% end %>
+    fi
 
     ;;
 
