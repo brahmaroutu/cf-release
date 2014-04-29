@@ -56,8 +56,8 @@ case "$1" in
       chown vcap:vcap $LOG_DIR
     fi
 
-    if [ -f $LOG_DIR/version.txt ]; then
-      OLD_VERSION=`cat $LOG_DIR/version.txt`
+    if [ -f $STORE_DIR/version.txt ]; then
+      OLD_VERSION=`cat $STORE_DIR/version.txt`
     else
       OLD_VERSION=0
     fi
@@ -68,6 +68,8 @@ case "$1" in
     if [ $NEW_VERSION != $OLD_VERSION  -a  -d $DATA_DIR  ]; then
       echo "need migration"
       NEED_MIGRATION=1
+    else
+      echo "skipping migration"
     fi
 
     if [ $NEED_MIGRATION -eq 1 ]; then
@@ -122,7 +124,7 @@ case "$1" in
     <% end %>
 
     echo "Creating version file..."
-    echo `$PACKAGE_DIR/bin/postgres -V| awk '{print $3}'` > $LOG_DIR/version.txt
+    echo `$PACKAGE_DIR/bin/postgres -V| awk '{print $3}'` > $STORE_DIR/version.txt
 
     echo "Creating databases..."
     <% db.databases.each do |database| %>
@@ -164,7 +166,7 @@ case "$1" in
                                             WHERE typelem = typoid OR typbasetype = typoid )
                                         SELECT oid FROM pg_catalog.pg_opclass, typeoids
                                           WHERE opcintype = typeoids.typoid
-								  );"
+                              );"
 
         $PACKAGE_DIR/bin/psql -U vcap -p $PORT \
                               -d "<%= database.name %>" \
