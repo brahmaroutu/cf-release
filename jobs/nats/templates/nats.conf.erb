@@ -11,8 +11,20 @@ debug: <%= p("nats.debug") %>
 trace: <%= p("nats.trace") %>
 
 authorization {
-  user: "<%= p("nats.user") %>"
-  password: "<%= p("nats.password") %>"
+  credentials =[ 
+    {
+        user: "<%= p("nats.user") %>"
+        password: "<%= p("nats.password") %>"
+    }
+    <% if !properties.nats.extra_credentials.nil? && properties.nats.extra_credentials.count>0 %>
+  	    <% properties.nats.extra_credentials.each do |cred| %>
+  	    { 
+            user: <%= cred.user %>
+            password: <%= cred.password %>
+        } 
+        <% end %> 
+  	<% end %> 
+  ] 
   timeout: <%= p("nats.authorization_timeout") %>
 }
 
@@ -21,8 +33,20 @@ cluster {
   port: <%= p("nats.port") + 1 %>
 
   authorization {
-    user: "<%= p("nats.user") %>"
-    password: "<%= p("nats.password") %>"
+  credentials =[ 
+    {
+        user: "<%= p("nats.user") %>"
+        password: "<%= p("nats.password") %>"
+    }
+    <% if !properties.nats.extra_credentials.nil? && properties.nats.extra_credentials.count>0 %>
+	    <% properties.nats.extra_credentials.each do |cred| %>
+	  	{ 
+            user: <%= cred.user %>
+            password: <%= cred.password %>
+	    } 
+        <% end %> 
+  	<% end %> 
+  ] 
     timeout: <%= p("nats.authorization_timeout") %>
   }
 

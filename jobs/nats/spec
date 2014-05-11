@@ -26,6 +26,8 @@ properties:
     description: "Username for server authentication."
   nats.password:
     description: "Password for server authentication."
+  nats.extra_credentials:
+    description: "List of username and passwords for server authentication, mostly older versions that clients are still using."
   nats.port:
     description: "The port for the NATS server to listen on."
   nats.authorization_timeout:
