@@ -71,26 +71,11 @@ case "$1" in
 
     echo "PostgreSQL started successfully"
 
-    echo "Creating roles..."
-    <% db.roles.each do |role| %>
-      echo "Trying to create role <%= role.name %>..."
-      set +e
-      # TODO remove unused roles automatically
-      # Default permissions are: nosuperuser nologin inherit nocreatedb.
-      # Will fail if role already exists, which is OK
-      $PACKAGE_DIR/bin/psql -U vcap -p $PORT -d postgres \
-                            -c "CREATE ROLE \"<%= role.name %>\""
-      set -e
-
-      echo "Setting password for role <%= role.name %>..."
-      $PACKAGE_DIR/bin/psql -U vcap -p $PORT -d postgres \
-                            -c "ALTER ROLE \"<%= role.name %>\" \
-                                WITH LOGIN PASSWORD '<%= role.password %>'"
-    <% end %>
-
     echo "Creating databases..."
+    <% tag2db = Hash.new %>
     <% db.databases.each do |database| %>
       echo "Trying to create database <%= database.name %>..."
+      <% tag2db[database.tag] = database.name %>
       set +e
       su - vcap -c "$PACKAGE_DIR/bin/createdb \"<%= database.name %>\" -p $PORT"
       set -e
@@ -112,6 +97,48 @@ case "$1" in
         <% end %>
       <% end %>
     <% end %>
+
+    echo "Creating roles..."
+    <% users = Array.new %>
+    <% db.roles.each do |role| %>
+      echo "Trying to create role <%= role.tag %>..."
+      set +e
+
+      <% role.credentials.each do |cred| %>
+        # Default permissions are: nosuperuser nologin inherit nocreatedb.
+        # Will fail if role already exists, which is OK
+        <% if !users.include?(cred.name) && (cred.delete.nil? || !cred.delete) %>
+          <% users << cred.name %>
+          $PACKAGE_DIR/bin/psql -U vcap -p $PORT -d <%= tag2db[role.tag] %> \
+                              -c "CREATE ROLE \"<%= cred.name %>\""
+
+          echo "Setting password for role <%= cred.name %>..."
+          $PACKAGE_DIR/bin/psql -U vcap -p $PORT -d <%= tag2db[role.tag] %> \
+                                -c "ALTER ROLE \"<%= cred.name %>\" \
+                                WITH LOGIN PASSWORD '<%= cred.password %>'"
+
+          echo "adding grant privileges to <%= cred.name %> on db <%= tag2db[role.tag] %>"
+          $PACKAGE_DIR/bin/psql -U vcap -p $PORT -d <%= tag2db[role.tag] %> \
+                            -c "grant all privileges on all tables in schema public to <%= cred.name %>"
+          $PACKAGE_DIR/bin/psql -U vcap -p $PORT -d <%= tag2db[role.tag] %> \
+                            -c "grant all privileges on all sequences in schema public to <%= cred.name %>"
+          $PACKAGE_DIR/bin/psql -U vcap -p $PORT -d <%= tag2db[role.tag] %> \
+                            -c "grant all privileges on all functions in schema public to <%= cred.name %>"
+        <% elsif (!cred.delete.nil? && cred.delete) %>
+          $PACKAGE_DIR/bin/psql -U vcap -p $PORT -d <%= tag2db[role.tag] %> \
+                            -c "reassign owned by <%= cred.name %> to vcap"
+
+          $PACKAGE_DIR/bin/psql -U vcap -p $PORT -d <%= tag2db[role.tag] %> \
+                            -c "revoke all privileges on all tables in schema public from  <%= cred.name %>"
+          $PACKAGE_DIR/bin/psql -U vcap -p $PORT -d <%= tag2db[role.tag] %> \
+                            -c "revoke all privileges on all sequences in schema public from <%= cred.name %>"
+          $PACKAGE_DIR/bin/psql -U vcap -p $PORT -d <%= tag2db[role.tag] %> \
+                            -c "revoke all privileges on all functions in schema public from <%= cred.name %>"
+          $PACKAGE_DIR/bin/psql -U vcap -p $PORT -d <%= tag2db[role.tag] %> -c "drop user <%= cred.name %>"
+        <% end %>
+      <% end %>
+    <% end %>
+
 
     ;;
 

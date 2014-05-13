@@ -127,8 +127,9 @@ properties:
     port: 5524
     roles:
       - tag: admin
-        name: ccadmin
-        password: admin
+        credentials:
+        - name: ccadmin
+          password: admin
     databases:
       - tag: cc
         name: ccdb
@@ -140,8 +141,9 @@ properties:
     port: 5524
     roles:
       - tag: admin
-        name: uaaadmin
-        password: admin
+        credentials:
+        - name: uaadmin
+          password: admin
     databases:
       - tag: uaa
         name: uaadb
@@ -152,12 +154,14 @@ properties:
     address: (( jobs.postgres_z1.networks.cf1.static_ips.[0] ))
     port: 5524
     roles:
-      - tag: admin
-        name: ccadmin
-        password: admin
-      - tag: admin
-        name: uaaadmin
-        password: admin
+      - tag: cc
+        credentials:
+        - name: ccadmin
+          password: admin
+      - tag: uaa
+        credentials:
+        - name: uaadmin
+          password: admin
     databases:
       - tag: cc
         name: ccdb

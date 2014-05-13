@@ -6,8 +6,8 @@ name: uaa
 
 database:
   url: jdbc:<%= properties.uaadb.db_scheme %>://<%= properties.uaadb.address %>:<%= properties.uaadb.port %>/<%= uaa_db.name %>
-  username: <%= uaa_role.name %>
-  password: "<%= uaa_role.password %>"
+  username: <%= uaa_role.credentials.first.name %>
+  password: "<%= uaa_role.credentials.first.password %>"
 
 spring_profiles: <%= properties.uaa.spring_profiles ? properties.uaa.spring_profiles : properties.uaadb.db_scheme %>
 
