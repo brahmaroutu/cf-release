@@ -127,9 +127,8 @@ properties:
     port: 5524
     roles:
       - tag: admin
-        credentials:
-        - name: ccadmin
-          password: admin
+        name: ccadmin
+        password: admin
     databases:
       - tag: cc
         name: ccdb
@@ -141,9 +140,8 @@ properties:
     port: 5524
     roles:
       - tag: admin
-        credentials:
-        - name: uaadmin
-          password: admin
+        name: uaaadmin
+        password: admin
     databases:
       - tag: uaa
         name: uaadb
@@ -155,11 +153,15 @@ properties:
     port: 5524
     roles:
       - tag: cc
-        credentials:
-        - name: ccadmin
-          password: admin
+        name: ccadmin
+        password: admin
+        extra_credentials:
+        - name: ccadmin2
+          password: admin2
       - tag: uaa
-        credentials:
+        name: uaaadmin
+        password: admin
+        extra_credentials:
         - name: uaadmin
           password: admin
     databases:
